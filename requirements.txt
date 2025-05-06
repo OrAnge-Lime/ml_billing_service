@@ -1,0 +1,13 @@
+fastapi[all] # Includes pydantic, uvicorn, etc.
+sqlalchemy[asyncio] # Core SQLAlchemy + asyncio support
+asyncpg # Async PostgreSQL driver
+psycopg2-binary # Standard PostgreSQL driver (SQLAlchemy might still need it for some sync operations or Alembic)
+passlib[bcrypt] # For password hashing
+python-jose[cryptography] # For JWT handling
+python-dotenv # To load .env files
+scikit-learn # For ML models
+joblib # For loading/saving scikit-learn models
+alembic # For database migrations
+greenlet # Required by SQLAlchemy async since 1.4/2.0
+
+# Add any other specific ML libraries if needed

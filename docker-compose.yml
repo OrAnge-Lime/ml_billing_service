@@ -1,0 +1,72 @@
+version: '3.8' # Версия синтаксиса файла
+
+services:
+  db:
+    image: postgres:15-alpine # Alpine — легковесный дистрибутив Linux
+    container_name: ml_service_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/ # Persist data
+    environment:
+      POSTGRES_USER: user # TODO: match .env
+      POSTGRES_PASSWORD: password 
+      POSTGRES_DB: ml_service_db 
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ml_service_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ml_service:
+    container_name: ml_service
+    mem_limit: 2600m
+    build:
+        context: ./search_engine
+        dockerfile: Dockerfile
+    image: ml_service:latest
+
+    # command: bash -c "uvicorn main:app --host 0.0.0.0 --port ${WORKER_PORT}"
+    # TODO: environ
+    environment:
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES_LLM}
+      TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE_LLM}
+      HF_TOKEN: ${HF_TOKEN}
+
+    # TODO: save ml models to
+    volumes:
+      - ./ml_service:/ml_service
+
+    runtime: nvidia
+    ports:
+      - ${WORKER_PORT}:${WORKER_PORT}
+
+
+  api:
+    build: . # Собрать образ для этого сервиса, используя Dockerfile из текущей директории
+    container_name: ml_service_api
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./models:/app/models
+      # Add a named volume for pip cache (optional, can speed up builds slightly)
+      # - pip_cache:/root/.cache/pip
+
+    environment: # Устанавливает переменные окружения
+      DATABASE_URL: postgresql+asyncpg://user:password@db:5432/ml_service_db
+      SECRET_KEY: your_very_secret_key_here_change_this # Change in production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      MODEL_DIRECTORY: /app/models
+      # Add environment variable to potentially disable reload in other contexts if needed
+      # WATCHFILES_FORCE_POLLING: "true" # May be needed on some systems if file watching doesn't work reliably
+    # Override the default CMD from Dockerfile to enable --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data: # Define the named volume for DB persistence dk_
+  # pip_cache: # Define optional pip cache volume
