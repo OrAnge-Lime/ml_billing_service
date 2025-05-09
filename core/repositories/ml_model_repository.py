@@ -19,3 +19,13 @@ class AbstractMLModelRepository(abc.ABC):
     @abc.abstractmethod
     async def list_all(self) -> List[MLModel]:
         raise NotImplementedError
+    
+class AbstractMLModelService(abc.ABC):
+    @abc.abstractmethod
+    async def upload_model(
+        self,
+        name: str,
+        type: str, 
+        model_name: str,
+    ):
+        raise NotImplementedError

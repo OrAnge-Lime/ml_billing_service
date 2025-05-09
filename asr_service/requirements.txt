@@ -1,0 +1,14 @@
+fastapi==0.103.2
+uvicorn[standard]==0.23.2
+pydantic-settings==2.3.3
+numpy 
+torch # Ensure compatibility with CUDA in Dockerfile and Whisper
+openai-whisper # Or latest stable version
+transformers # Often a helpful companion or dependency
+accelerate # For faster model loading/inference on some setups
+python-multipart 
+# bitsandbytes # Optional for quantization, ensure compatibility
+# datasets # Optional
+# einops # Optional
+
+# httpx is not needed by the ASR service itself

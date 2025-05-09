@@ -23,8 +23,7 @@ router = APIRouter(
 @router.post("/register", response_model=user_schemas.UserRead, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: user_schemas.UserCreate,
-    user_use_cases: UserUseCases = Depends(get_user_use_case) # Depend on the use case provider
-    # No session dependency needed here
+    user_use_cases: UserUseCases = Depends(get_user_use_case)
 ):
     """
     Register a new user. Session is managed via injected dependencies.

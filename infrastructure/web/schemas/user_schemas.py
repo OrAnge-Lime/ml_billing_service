@@ -7,7 +7,7 @@ class UserBase(BaseModel):
 
 # Schema for creating a new user (request)
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=6, example="strongpassword")
+    password: str = Field(..., min_length=3, example="strongpassword")
 
 # Schema for reading user data (response)
 class UserRead(UserBase):

@@ -18,22 +18,20 @@ class SQLAlchemyMLModelRepository(AbstractMLModelRepository):
         return MLModel(
             id=db_model.id,
             name=db_model.name,
-            filename=db_model.filename,
             description=db_model.description,
             cost=db_model.cost,
-            input_schema=db_model.input_schema,
-            output_schema=db_model.output_schema
+            type=db_model.type,
+            model_name=db_model.model_name,
         )
 
     def _to_db_model(self, model: MLModel) -> MLModelDB:
         return MLModelDB(
             id=model.id,
             name=model.name,
-            filename=model.filename,
             description=model.description,
             cost=model.cost,
-            input_schema=model.input_schema,
-            output_schema=model.output_schema
+            type=model.type,
+            model_name=model.model_name,
         )
 
     async def add(self, model: MLModel) -> MLModel:

@@ -13,13 +13,9 @@ class JWTHandler:
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        to_encode = data.copy() # dk_
-        # if expires_delta:
-        #     expire = datetime.now(timezone.utc) + expires_delta
-        # else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=JWTHandler.ACCESS_TOKEN_EXPIRE_MINUTES)
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, JWTHandler.SECRET_KEY, algorithm=JWTHandler.ALGORITHM)
+        data.update({"exp": expire})
+        encoded_jwt = jwt.encode(data, JWTHandler.SECRET_KEY, algorithm=JWTHandler.ALGORITHM)
         return encoded_jwt
 
     @staticmethod

@@ -31,12 +31,9 @@ async def get_db_session() -> AsyncSession:
         except Exception:
             await session.rollback()
             raise
-        finally:
-            # The session is automatically closed by the context manager 'async with' dk_
-            pass # await session.close() # Not needed with async with AsyncSessionFactory() as session
 
 async def create_tables():
-    async with engine.begin() as conn: # dk_
+    async with engine.begin() as conn: 
         # await conn.run_sync(Base.metadata.drop_all)
         # создает все таблицы, которые унаследованы от Base, если не существуют.
         await conn.run_sync(Base.metadata.create_all) 

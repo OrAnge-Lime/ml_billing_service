@@ -1,31 +1,52 @@
 import uuid
 import datetime
 from pydantic import BaseModel, Field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
-# Schema for making a prediction request
+
 class PredictionRequest(BaseModel):
-    # Define the expected structure of input data
-    # Using a simple dict here, but could be more specific
-    # e.g., using List[float] or a nested Pydantic model
-    input_data: Dict[str, Any] | list = Field(..., example={"feature1": 1.0, "feature2": 2.5} ) # Or example=[[1.0, 2.5]]
+    """
+    Schema for data to be logged for a prediction request.
+    The actual audio is sent as a file upload, not in this JSON body.
+    This schema can hold metadata about the audio.
+    """
 
-# Schema for the prediction response (successful)
+    original_filename: Optional[str] = Field(None, example="meeting_audio.mp3")
+    content_type: Optional[str] = Field(None, example="audio/mpeg")
+    size_bytes: Optional[int] = Field(None, example=1024000)
+    asr_language_param: Optional[str] = Field(
+        None, example="en", description="Language hint passed to ASR."
+    )
+    asr_task_param: Optional[str] = Field(
+        None,
+        example="transcribe",
+        description="Task (transcribe/translate) passed to ASR.",
+    )
+
+
 class PredictionResponse(BaseModel):
-    prediction_id: uuid.UUID
-    model_id: uuid.UUID
-    result: Any = Field(..., example=[0] or {"class": "setosa"}) # Example output
-    credits_remaining: int
+    """Response from the main API after a prediction (transcription) attempt."""
 
-# Schema for reading past prediction records
-class PredictionRecord(BaseModel):
+    prediction_id: uuid.UUID
+    model_name: str
+    result: Optional[str] = Field(None, description="Transcribed text")
+    status_of_prediction: str = Field(
+        ..., description="Status of the prediction attempt ('success' or 'failed')."
+    )
+    credits_remaining: int
+    message: Optional[str] = Field(
+        None, description="Additional message, e.g., error details."
+    )
+
+
+class PredictionRecord(BaseModel):  # For retrieving history
     id: uuid.UUID
     user_id: uuid.UUID
-    model_id: uuid.UUID
-    input_data: Dict[str, Any] | list
-    output_data: Optional[Any] = None
+    model_id: uuid.UUID  # Refers to MLModelDB entry
+    input_data: Dict[str, Any]  # Stores metadata like filename, size, content_type
+    output_data: Optional[str] = None  # Transcribed text
     timestamp: datetime.datetime
-    status: str
+    status: str  # 'success' or 'failed'
     cost_charged: int
     error_message: Optional[str] = None
 

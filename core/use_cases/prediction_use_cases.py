@@ -1,22 +1,15 @@
 import uuid
 import datetime
-from typing import Any, List, Tuple
-from sqlalchemy.ext.asyncio import AsyncSession # Import Session for transaction management
+import logging
+from typing import Tuple, List, Optional # Added Optional
+import io
 
 from ..entities.prediction import Prediction
 from ..repositories.user_repository import AbstractUserRepository
 from ..repositories.ml_model_repository import AbstractMLModelRepository
-from ..repositories.prediction_repository import AbstractPredictionRepository
-from infrastructure.ml.model_loader import ModelLoader, ModelExecutionError # Specific loader/error
-from config.settings import settings # Access settings for model directory
+from ..repositories.prediction_repository import AbstractPredictionRepository, AbstractPredictionService
 
-class PredictionError(Exception):
-    """Custom exception for prediction failures."""
-    pass
-
-class InsufficientCreditsError(PredictionError):
-    """Custom exception for insufficient credits."""
-    pass
+logger = logging.getLogger(__name__)
 
 
 class PredictionUseCases:
@@ -25,89 +18,99 @@ class PredictionUseCases:
         user_repo: AbstractUserRepository,
         model_repo: AbstractMLModelRepository,
         prediction_repo: AbstractPredictionRepository,
-        model_loader: ModelLoader # Inject the model loader
+        prediction_service: AbstractPredictionService
     ):
         self.user_repo = user_repo
         self.model_repo = model_repo
         self.prediction_repo = prediction_repo
-        self.model_loader = model_loader
+        self.prediction_service = prediction_service
 
     async def make_prediction(
         self,
         user_id: uuid.UUID,
-        model_id: uuid.UUID,
-        input_data: dict,
-        db_session: AsyncSession
-    ) -> Tuple[Any, uuid.UUID]:
-        """
-        Makes a prediction, handles billing, and records the transaction.
-        Returns the prediction output and the prediction record ID.
-        Raises PredictionError or InsufficientCreditsError on failure.
-        """
-        async with db_session.begin():
-            # Fetch User and Model (lock user row for update) dk_
-            # Use with_for_update to lock the user row during the transaction
-            user = await self.user_repo.get_by_id_for_update(user_id, db_session) # Modify repo interface/impl
-            model = await self.model_repo.get_by_id(model_id) # No lock needed for model typically
+        model_name: str,
+        audio_file_content: bytes,
+        audio_filename: str,
+        audio_content_type: str,
+        asr_language_param: Optional[str]=None,
+        asr_task_param: Optional[str]=None
+    ) -> Tuple[Optional[str], uuid.UUID, str, str]: # (transcribed_text, prediction_db_id, model_identifier_str, status_str)
 
-            if not user:
-                raise PredictionError(f"User id {user_id} not found.")
-            if not user.is_active:
-                 raise PredictionError(f"User {user.username} is not active.")
-            if not model:
-                raise PredictionError(f"Model id {model_id} not found.")
+        final_status_str = 'pending'
+        cost_charged = 0
+        error_message = None
+        transcribed_text_from_asr = None
+        prediction_db_id = None
+
+
+        # Logged input data for PredictionDB
+        logged_input_metadata = {
+            "original_filename": audio_filename,
+            "content_type": audio_content_type,
+            "size_bytes": len(audio_file_content),
+            "asr_language_param": asr_language_param,
+            "asr_task_param": asr_task_param,
+        }
+
+        try:
+            # Fetch user and DB model entry
+            user = await self.user_repo.get_by_id_for_update(user_id)
+            db_model_entry = await self.model_repo.get_by_name(model_name)
+            logged_input_metadata["requested_model_name"] = model_name
 
             # Check Credits
-            if user.credits < model.cost:
-                raise InsufficientCreditsError(
-                    f"Insufficient credits. Required: {model.cost}, Available: {user.credits}"
-                )
+            if user.credits < db_model_entry.cost:
+                raise Exception(f"Insufficient credits. Required: {db_model_entry.cost}, Current: {user.credits}")
 
-            # Load and Execute Model
-            prediction_output = None
-            error_message = None
-            status = 'pending'
-            cost_charged = 0
-
+            # Call External ASR Service
             try:
-                prediction_output = await self.model_loader.predict(model.filename, input_data)
-                status = 'success'
+                asr_response_data = await self.prediction_service.get_prediction(
+                    model_name=model_name,
+                    file=io.BytesIO(audio_file_content), # TODO: dataclass
+                    lang=asr_language_param,
+                    task=asr_task_param,
+                )
+                logger.debug(f"ASR service response data: {asr_response_data}")
 
-            except ModelExecutionError as e:
-                status = 'failed'
-                error_message = f"Model execution failed: {str(e)}"
+                if asr_response_data.get("status") == "success":
+                    transcribed_text_from_asr = asr_response_data.get("transcribed_text")
+                    final_status_str = 'success'
+                    cost_charged = db_model_entry.cost 
+                else:
+                    final_status_str = 'failed'
+                    error_message = asr_response_data.get("message", "ASR service indicated failure without details.")
+                    logger.error(f"ASR service failed for {model_name}: {error_message}")
 
             except Exception as e:
-                # unexpected errors
-                status = 'failed'
-                error_message = f"Unexpected prediction error: {str(e)}"
+                logger.exception(f"Unexpected error calling ASR for {model_name}")
 
-            # Record Prediction 
-            prediction_record = Prediction(
+            # Record Prediction Attempt
+            prediction_to_save = Prediction(
                 user_id=user.id,
-                model_id=model.id,
-                input_data=input_data, # Ensure input_data is serializable (e.g., dict)
-                output_data=prediction_output, # Ensure output is serializable
-                timestamp=datetime.datetime.utcnow(),
-                status=status,
+                model_name=db_model_entry.name,
+                input_data=logged_input_metadata,
+                output_data=transcribed_text_from_asr,
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                status=final_status_str,
                 cost_charged=cost_charged,
                 error_message=error_message
             )
-            # Use the session directly for adding within the transaction
-            await self.prediction_repo.add_with_session(prediction_record, db_session) # Modify repo interface/impl dk_
+            saved_prediction = await self.prediction_repo.add(prediction_to_save)
+            prediction_db_id = saved_prediction.id
 
-            # Upd credits 
-            if status == 'success':
-                new_balance = user.credits - model.cost
-                # Use the session directly for updating within the transaction
-                await self.user_repo.update_credits_with_session(user.id, new_balance, db_session) # Modify repo interface/impl
+            # Deduct Credits
+            if final_status_str == 'success':
+                await self.user_repo.update_credits(user.id, user.credits - cost_charged)
+                return transcribed_text_from_asr, prediction_db_id, model_name, final_status_str
+            else:
+                raise Exception(error_message or "ASR processing failed for an unknown reason.")
 
-        # Return result only if successful, otherwise exceptions are raised
-        if status == 'success':
-            return prediction_output, prediction_record.id
-        else:
-            raise PredictionError(error_message or "Prediction failed for an unknown reason.") # dk_
+        except Exception as e:
+            logger.warning(f"Prediction error for user {user_id}: {e}")
+            raise e 
 
 
-    async def get_user_predictions(self, user_id: uuid.UUID, limit: int = 10, offset: int = 0) -> List[Prediction]:
-         return await self.prediction_repo.get_by_user_id(user_id, limit=limit, offset=offset)
+    async def get_user_predictions(
+        self, user_id: uuid.UUID, limit: int = 10, offset: int = 0
+    ) -> List[Prediction]:
+        return await self.prediction_repo.get_by_user_id(user_id, limit=limit, offset=offset)

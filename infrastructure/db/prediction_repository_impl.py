@@ -18,7 +18,7 @@ class SQLAlchemyPredictionRepository(AbstractPredictionRepository):
         return Prediction(
             id=db_pred.id,
             user_id=db_pred.user_id,
-            model_id=db_pred.model_id,
+            model_name=db_pred.model_name,
             input_data=db_pred.input_data,
             output_data=db_pred.output_data,
             timestamp=db_pred.timestamp,
@@ -31,7 +31,7 @@ class SQLAlchemyPredictionRepository(AbstractPredictionRepository):
         return PredictionDB(
             id=prediction.id,
             user_id=prediction.user_id,
-            model_id=prediction.model_id,
+            model_name=prediction.model_name,
             input_data=prediction.input_data,
             output_data=prediction.output_data,
             timestamp=prediction.timestamp,

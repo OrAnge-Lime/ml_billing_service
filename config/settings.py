@@ -1,8 +1,9 @@
 import os
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+import logging
 
-# Load environment variables from .env file
+logger = logging.getLogger(__name__)
 load_dotenv()
 
 class Settings(BaseSettings):
@@ -11,7 +12,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "default_secret")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-    MODEL_DIRECTORY: str = os.getenv("MODEL_DIRECTORY", "./models")
+
+    # ASR Service settings
+    ASR_SERVICE_URL: str = os.getenv("ASR_SERVICE_URL", "http://asr_service:8011") # Updated port, service name
+    ASR_REQUEST_TIMEOUT_SEC: int = int(os.getenv("ASR_REQUEST_TIMEOUT_SEC", 300)) # Increased timeout for ASR
 
     class Config:
         # If not using load_dotenv(), pydantic can load from .env directly
@@ -20,6 +24,4 @@ class Settings(BaseSettings):
         extra = 'ignore' # Ignore extra fields from .env
 
 settings = Settings()
-
-# Optional: Print loaded settings for verification during startup
-# print(f"Loaded settings: DATABASE_URL={settings.DATABASE_URL}, SECRET_KEY={'*' * 5}, ALGORITHM={settings.ALGORITHM}")
+logger.info(f"Main API Loaded Settings: ASR_SERVICE_URL={settings.ASR_SERVICE_URL}")
