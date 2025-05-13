@@ -1,11 +1,9 @@
-version: '3.8' 
-
 services:
   db:
     image: postgres:15-alpine 
     container_name: ml_service_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - ./postgres_data:/var/lib/postgresql/data/
     environment:
       POSTGRES_USER: ${DB_USER}  
       POSTGRES_PASSWORD: ${DB_PASSWORD}  
@@ -32,7 +30,27 @@ services:
     environment:
       MODEL_CACHE_DIRECTORY: ${MODEL_CACHE_DIRECTORY}
       DEFAULT_DEVICE: cuda 
+    runtime: nvidia
     command: uvicorn main:app --host 0.0.0.0 --port ${ASR_PORT} --reload 
+  
+  ui:
+    build:
+      context: ./streamlit_ui
+      dockerfile: Dockerfile 
+    container_name: ml_streamlit_ui
+    depends_on:
+      api: 
+        condition: service_started 
+    ports:
+      - "${UI_PORT}:${UI_PORT}" 
+    volumes:
+      - ./streamlit_ui:/streamlit_ui
+    environment:
+      API_HOST: api
+      API_PORT: ${API_PORT} 
+      STREAMLIT_SERVER_PORT: ${UI_PORT}
+
+    command: ['streamlit', 'run', 'ui_main.py']
 
   api:
     build: . 
@@ -53,8 +71,9 @@ services:
       ALGORITHM: ${ALGORITHM}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       ASR_SERVICE_URL: http://asr_service:${ASR_PORT}
-      ASR_REQUEST_TIMEOUT_SEC: 300 
-    command: uvicorn main:app --host 0.0.0.0 --port ${API_PORT} --reload
+      ASR_REQUEST_TIMEOUT_SEC: 300
+
+    command: uvicorn main:app --host 0.0.0.0 --port ${API_PORT}
 
 volumes:
   postgres_data: {}

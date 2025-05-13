@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-import uuid
 import logging
 
 from core.use_cases.user_use_cases import UserUseCases
@@ -18,8 +17,6 @@ router = APIRouter(
     tags=["Users"],
 )
 
-# No need for get_user_use_cases helper here, use the dependency directly
-
 @router.post("/register", response_model=user_schemas.UserRead, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: user_schemas.UserCreate,
@@ -29,15 +26,13 @@ async def register_user(
     Register a new user. Session is managed via injected dependencies.
     """
     try:
-        # Call use case method without session
         user = await user_use_cases.register_user(
             username=user_data.username,
             password=user_data.password,
             initial_credits=10,
         )
         return user
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     except Exception as e:
         logger.exception(f"Error during user registration for {user_data.username}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error during registration")
@@ -46,13 +41,11 @@ async def register_user(
 @router.post("/token", response_model=token_schemas.Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    user_use_cases: UserUseCases = Depends(get_user_use_case) # Depend on use case provider
-    # No session dependency needed here
+    user_use_cases: UserUseCases = Depends(get_user_use_case)
 ):
     """
     Authenticate user and return JWT token. Session is managed via injected dependencies.
     """
-    # Call use case method without session
     user = await user_use_cases.authenticate_user(
         username=form_data.username,
         password=form_data.password,
@@ -72,7 +65,6 @@ async def login_for_access_token(
 
 @router.get("/me", response_model=user_schemas.UserRead)
 async def read_users_me(
-    # This dependency handles auth and fetching user using its *own* session context if needed
     current_user: UserEntity = Depends(get_current_active_user)
 ):
     """
@@ -83,18 +75,16 @@ async def read_users_me(
 
 @router.get("/me/credits", response_model=dict)
 async def get_my_credits(
-    # Use the auth dependency to get the user ID/info securely
     current_user: UserEntity = Depends(get_current_active_user),
-    # Use the use case dependency to perform the action
     user_use_cases: UserUseCases = Depends(get_user_use_case)
 ):
     """ Get the current user's credit balance using Use Case. Session managed implicitly. """
     try:
-        # Use case handles fetching via its injected repo (which has the session)
         credits = await user_use_cases.check_user_credits(current_user.id)
         return {"username": current_user.username, "credits": credits}
-    except ValueError as e: # User not found (shouldn't happen if authenticated)
-         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.exception(f"Error fetching credits for user {current_user.username}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not fetch credits.")
+
+# TODO: Logout endpoint
+# TODO: Replenishment of balance
