@@ -53,24 +53,14 @@ class WhisperASR(AbstractMLModel):
             transcribe_options = {"fp16": torch.cuda.is_available() and self.device == "cuda"}
             if language:
                 transcribe_options["language"] = language
-            # Task is passed directly as an argument to transcribe method
-            # if task: # 'task' is a direct arg to model.transcribe, not in options dict for 'openai-whisper'
-            # transcribe_options["task"] = task
-
-            # Perform transcription
-            # model.transcribe is synchronous. For long audio files, consider
-            # running this in a thread pool executor if it blocks the event loop.
-            # loop = asyncio.get_running_loop()
-            # result = await loop.run_in_executor(None, self.model.transcribe, audio_file_path, task=task, **transcribe_options)
             result = self.model.transcribe(audio_file_path, task=task, **transcribe_options)
 
 
             logger.info(f"Transcription successful for: {audio_file_path}")
-            # The result object from Whisper is a dict-like object
             return {
                 "text": result.get("text", ""),
                 "language_detected": result.get("language", None),
-                "segments": result.get("segments", []) # List of segment dictionaries
+                "segments": result.get("segments", [])
             }
 
         except Exception as e:

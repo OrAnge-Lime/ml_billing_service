@@ -42,7 +42,7 @@ class PredictionResponse(BaseModel):
 class PredictionRecord(BaseModel):  # For retrieving history
     id: uuid.UUID
     user_id: uuid.UUID
-    model_id: uuid.UUID  # Refers to MLModelDB entry
+    model_name: str  # Refers to MLModelDB entry
     input_data: Dict[str, Any]  # Stores metadata like filename, size, content_type
     output_data: Optional[str] = None  # Transcribed text
     timestamp: datetime.datetime

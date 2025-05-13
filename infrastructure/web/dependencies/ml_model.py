@@ -14,10 +14,7 @@ async def get_asr_http_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """
     global _asr_http_client_instance
     if _asr_http_client_instance is None:
-        # This case should ideally be hit only if running outside the main app's lifespan,
-        # e.g., in a script or unit test that doesn't set up the app state.
         logger.warning("ASR HTTP client not initialized via app lifespan. Creating temporary client.")
-        # Use the configured base URL for the temporary client as well
         async with httpx.AsyncClient(base_url=settings.ASR_SERVICE_URL, timeout=settings.ASR_REQUEST_TIMEOUT_SEC) as client:
             yield client
     else:
