@@ -36,22 +36,24 @@ async def add_new_model(
     "/transcribe",
     response_model=ASRResponse,
 )
+
 async def transcribe_audio(
     model_identifier: str = Form(
-        ..., example="whisper-small", description="Identifier of the Whisper model."
+        "whisper-small", description="Identifier of the Whisper model."
     ),
     audio_file: UploadFile = File(..., description="The audio file to transcribe."),
     language: Optional[str] = Form(
-        None,
-        example="en",
+        "en",
         description="Optional: Language of the audio.",
     ),
     task: Optional[str] = Form(
         "transcribe",
-        example="transcribe",
         description="Task to perform: 'transcribe' or 'translate'.",
     ),
 ):
+    """
+    Transcribes an uploaded audio file using a specified Whisper ASR model.
+    """
     logger.info(
         f"Received /transcribe request for model: '{model_identifier}', file: '{audio_file.filename}'"
     )
